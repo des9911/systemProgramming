@@ -1,191 +1,60 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<arpa/inet.h>
-#include<sys/socket.h>
-#include<pthread.h>
-#include<time.h>
- 
-#define BUF_SIZE 100
-#define NORMAL_SIZE 20
- 
-void* send_msg(void* arg);
-void* recv_msg(void* arg);
-void error_handling(char* msg);
- 
-void menu();
-void changeName();
-void menuOptions(); 
- 
-char name[NORMAL_SIZE]="[DEFALT]";     // name
-char msg_form[NORMAL_SIZE];            // msg form
-char serv_time[NORMAL_SIZE];        // server time
-char msg[BUF_SIZE];                    // msg
-char serv_port[NORMAL_SIZE];        // server port number
-char clnt_ip[NORMAL_SIZE];            // client ip address
- 
- 
-int main(int argc, char *argv[])
-{
-    int sock;
-    struct sockaddr_in serv_addr;
-    pthread_t snd_thread, rcv_thread;
-    void* thread_return;
- 
-    if (argc!=4)
-    {
-        printf(" Usage : %s <ip> <port> <name>\n", argv[0]);
-        exit(1);
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <pthread.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+void *receive_messages(void *arg) {
+    int socket = *(int *)arg;
+    char buffer[BUFFER_SIZE];
+    int bytes_read;
+
+    while ((bytes_read = recv(socket, buffer, sizeof(buffer), 0)) > 0) {
+        //서버에서 온 데이터를 자기 자신의 터미널에 출력
+        buffer[bytes_read] = '\0';
+        printf("%s", buffer);
     }
- 
-    // local time
-    struct tm *t;
-    time_t timer = time(NULL);
-    t=localtime(&timer);
-    sprintf(serv_time, "%d-%d-%d %d:%d", t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour,
-    t->tm_min);
- 
-    sprintf(name, "[%s]", argv[3]);
-    sprintf(clnt_ip, "%s", argv[1]);
-    sprintf(serv_port, "%s", argv[2]);
-    sock=socket(PF_INET, SOCK_STREAM, 0);
- 
-    memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family=AF_INET;
-    serv_addr.sin_addr.s_addr=inet_addr(argv[1]);
-    serv_addr.sin_port=htons(atoi(argv[2]));
- 
-    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr))==-1)
-        error_handling(" conncet() error");
- 
-    // call menu
-    menu();
- 
-    pthread_create(&snd_thread, NULL, send_msg, (void*)&sock);
-    pthread_create(&rcv_thread, NULL, recv_msg, (void*)&sock);
-    pthread_join(snd_thread, &thread_return);
-    pthread_join(rcv_thread, &thread_return);
-    close(sock);
+    return NULL;
+}
+
+int main(int argc, char *argv[]) {
+    int client_socket;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    char chat[BUFFER_SIZE];
+
+    client_socket = socket(AF_INET, SOCK_STREAM, 0); //클라이언트 소켓 생성
+    if (client_socket == -1) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); //로컬 호스트의 IP주소로 연결하겠다는 뜻, 다른 컴퓨터라면 서버 컴퓨터의 IP주소를 입력해야 함
+
+    if (connect(client_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        //클라이언트 소켓에서 서버 소켓으로 연결 요청을 보냄 -> 서버의 listen중인 소켓의 대기열로 들어가는 듯 함
+        perror("Connection failed");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Connected to server. Type messages and press Enter to send.\n");
+
+    pthread_t thread;
+    pthread_create(&thread, NULL, receive_messages, (void *)&client_socket); //receive_message함수를 수행하는 쓰레드 생성, 인자로 클라이언트 소켓 주소 전달
+
+    while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        //표준입력으로 메세지를 입력받음, 이후 입력 대기상태
+
+        sprintf(chat, "[%s] %s", argv[1], buffer);
+        send(client_socket, chat, strlen(chat), 0); //입력받은 메세지를 자기 자신 소켓으로 전달
+    }
+
+    close(client_socket);
     return 0;
-}
- 
-void* send_msg(void* arg)
-{
-    int sock=*((int*)arg);
-    char name_msg[NORMAL_SIZE+BUF_SIZE];
-    char myInfo[BUF_SIZE];
-    char* who = NULL;
-    char temp[BUF_SIZE];
- 
-    // send join messge
-    printf(" >> join the chat !! \n");
-    sprintf(myInfo, "%s's join. IP_%s\n",name , clnt_ip);
-    write(sock, myInfo, strlen(myInfo));
- 
-    while(1)
-    {
-        fgets(msg, BUF_SIZE, stdin);
- 
-        // menu_mode command -> !menu
-        if (!strcmp(msg, "!menu\n"))
-        {
-            menuOptions();
-            continue;
-        }
- 
-        else if (!strcmp(msg, "q\n") || !strcmp(msg, "Q\n"))
-        {
-            close(sock);
-            exit(0);
-        }
- 
-        // send message
-        sprintf(name_msg, "%s %s", name,msg);
-        write(sock, name_msg, strlen(name_msg));
-    }
-    return NULL;
-}
- 
-void* recv_msg(void* arg)
-{
-    int sock=*((int*)arg);
-    char name_msg[NORMAL_SIZE+BUF_SIZE];
-    int str_len;
- 
-    while(1)
-    {
-        str_len=read(sock, name_msg, NORMAL_SIZE+BUF_SIZE-1);
-        if (str_len==-1)
-            return (void*)-1;
-        name_msg[str_len]=0;
-        fputs(name_msg, stdout);
-    }
-    return NULL;
-}
- 
- 
-void menuOptions() 
-{
-    int select;
-    // print menu
-    printf("\n\t**** menu mode ****\n");
-    printf("\t1. change name\n");
-    printf("\t2. clear/update\n\n");
-    printf("\tthe other key is cancel");
-    printf("\n\t*******************");
-    printf("\n\t>> ");
-    scanf("%d", &select);
-    getchar();
-    switch(select)
-    {
-        // change user name
-        case 1:
-        changeName();
-        break;
- 
-        // console update(time, clear chatting log)
-        case 2:
-        menu();
-        break;
- 
-        // menu error
-        default:
-        printf("\tcancel.");
-        break;
-    }
-}
- 
- 
-// change user name
-void changeName()
-{
-    char nameTemp[100];
-    printf("\n\tInput new name -> ");
-    scanf("%s", nameTemp);
-    sprintf(name, "[%s]", nameTemp);
-    printf("\n\tComplete.\n\n");
-}
- 
-void menu()
-{
-    system("clear");
-    printf(" **** moon/sum chatting client ****\n");
-    printf(" server port : %s \n", serv_port);
-    printf(" client IP   : %s \n", clnt_ip);
-    printf(" chat name   : %s \n", name);
-    printf(" server time : %s \n", serv_time);
-    printf(" ************* menu ***************\n");
-    printf(" if you want to select menu -> !menu\n");
-    printf(" 1. change name\n");
-    printf(" 2. clear/update\n");
-    printf(" **********************************\n");
-    printf(" Exit -> q & Q\n\n");
-}    
- 
-void error_handling(char* msg)
-{
-    fputs(msg, stderr);
-    fputc('\n', stderr);
-    exit(1);
 }
