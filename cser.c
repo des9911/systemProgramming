@@ -37,9 +37,10 @@ void *handle_client(void *arg) {
         pthread_mutex_unlock(&mutex);
         time_t t = time(NULL);
         struct tm tm = *localtime(&t);
-        char chat[BUFFER_SIZE];
-        int chat_len;
+        char chat[BUFFER_SIZE]; //채팅 로그를 저장할 문자열
+        int chat_len; 
         chat_len = sprintf(chat, "(%04d-%02d-%02d %02d:%02d:%02d) %s",tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, buffer);
+        //chat에 날짜, 시간, 이름, 내용 순으로 저장
         write(fd, chat, chat_len);
     }
 
@@ -62,7 +63,7 @@ int main() {
     struct sockaddr_in server_addr, client_addr; //소켓을 바인드 할 때 특성으로 넣을 구조체(?), 소켓의 주소 정보가 저장되는 구조체
     socklen_t addr_len = sizeof(client_addr); //위 구조체 크기
 
-    if((fd = open("log.txt", O_RDWR|O_APPEND, 0666)) == -1) { //log를 저장할 "log.txt" 열기
+    if((fd = open("log.txt", O_RDWR|O_APPEND, 0666)) == -1) { //채팅을 저장할 "log.txt" 열기
         if((fd = open("log.txt", O_RDWR|O_CREAT, 0666)) == -1) { //"log.txt" 없으면 생성
             perror("LOG file open failed");
             exit(EXIT_FAILURE);
