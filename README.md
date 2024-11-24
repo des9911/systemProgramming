@@ -10,11 +10,11 @@ server에서 client 정보를 구조체로 저장하는 기능은 아직 구현 
 
 + !search, !showall, !quit, !help 명령어 구현하였습니다. // 2024-11-24
 
-!help, !showall   
+!help, !showall 명령어 실행 
 
 ![team_2_help_showall](https://github.com/user-attachments/assets/666ace33-ae54-4f5a-b678-9b7aef8295a0)  
 
-!search, !quit
+!search, !quit 명령어 실행
 
 ![team_2_search_quit](https://github.com/user-attachments/assets/bc176055-907a-45fe-8faa-5d042dd90c8b)  
 
